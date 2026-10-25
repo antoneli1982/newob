@@ -45,9 +45,17 @@ const main=controller.entries.find(e=>e.id==='building_new');
 assert.equal(controller.dimensions(main).join(','),'28.75,47.54,9');
 get('#dimension-toggle').click();assert(controller.enabled);assert(!get('#dimension-panel').hidden);assert.equal(get('#dimension-toggle').attributes['aria-pressed'],'true');
 controller.tick(1000,true);assert(controller.overlay.children.some(g=>g.visible));
+function checkLabels(){
+ const labels=[];controller.overlay.traverseVisible(o=>{if(o.isSprite&&o.userData.screenRect)labels.push(o);});
+ assert(labels.length>0,'At least one readable measurement is present');
+ for(const label of labels){const r=label.userData.screenRect;assert(r.right-r.left>=150&&r.bottom-r.top===50);}
+ for(let i=0;i<labels.length;i++)for(let j=i+1;j<labels.length;j++){const a=labels[i].userData.screenRect,b=labels[j].userData.screenRect;assert(!(a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top),'Measurement labels overlap');}
+}
+checkLabels();
 const truck=controller.entries.find(e=>e.id==='equipment_MUNCK_QUARENTENA');assert(truck);controller.select(truck.id);assert.equal(exits,1);controller.tick(1200,true);
 assert.equal(controller.overlay.children.filter(g=>g.visible).length,1);
 assert(get('#dimension-readout').children[1].textContent.includes(' m'));
+assert(!/\d+,\d{2}/.test(get('#dimension-readout').children[1].textContent),'Readout must use one decimal');checkLabels();
 const machine=controller.entries.find(e=>e.object?.userData.forklift);assert(machine);const original=controller.dimensions(machine).join(',');controller.select(machine.id);controller.tick(1400,true);
 machine.object.position.x+=.8;machine.object.rotation.y+=Math.PI/3;machine.object.updateMatrixWorld(true);controller.tick(1600,true);
 const after=controller.dimensions(machine);const prior=original.split(',').map(Number);after.forEach((n,i)=>assert(Math.abs(n-prior[i])<1e-8,'Local dimensions are invariant under movement/rotation'));
@@ -55,9 +63,11 @@ assert(controller.overlay.children.filter(g=>g.visible).length===1);
 for(const group of controller.overlay.children)for(const o of group.children){if(o.isSprite)assert(o.scale.toArray().every(Number.isFinite));if(o.isLineSegments)assert(Array.from(o.geometry.attributes.position.array).every(Number.isFinite));}
 get('#dimension-category').value='openings';get('#dimension-category').dispatchEvent({type:'change'});controller.tick(1800,true);assert(get('#dimension-item').children.length>1);
 const csv=controller.csv();assert(csv.startsWith('\ufeff'));assert.equal(csv.split('\r\n').length,controller.entries.length+1);assert(csv.includes('Galpão novo'));
+assert(csv.includes('"28,8";"47,5";"9,0"'));assert(!/"\d+,\d{2,}"/.test(csv),'CSV must use one decimal');
 fs.writeFileSync(new URL('./OB_COTAS_DO_MODELO.csv',import.meta.url),csv);
 get('#dimension-close').click();assert(!controller.enabled);assert(!controller.overlay.visible);assert(get('#dimension-panel').hidden);
 controller.setEnabled(true);get('#viewport').clientWidth=390;get('#viewport').clientHeight=700;camera.aspect=390/700;camera.updateProjectionMatrix();controller.tick(2000,true);
+controller.select(main.id);controller.tick(2200,true);checkLabels();
 assert.equal(html.split('OB_DIMENSIONS_SOURCE_START').length,2);assert(html.includes('__obDimensions.tick(r)'));
 const result={parsed_bundle:true,elements:controller.entries.length,buildings:3,equipment:model.equipment.children.length,opening_dimensions:controller.entries.filter(e=>e.category==='openings').length,toggle_and_hide:true,category_and_selection:true,moving_forklift_local_dimensions:true,mobile_projection_finite:true,offline_html:true,model_not_modified:true,complete_csv:true,visual_browser_check:false};
 fs.writeFileSync(new URL('./VERIFICACAO_COTAS.json',import.meta.url),JSON.stringify(result,null,2));

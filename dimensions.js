@@ -7,7 +7,7 @@ function installOBDimensions({THREE:T,model,scene,camera,viewport,controls,chang
   const colors=[0x56c8ff,0xffc569,0x77e1a8], axes=['L','C','H'];
   const overlay=new T.Group();overlay.name='COTAS_APENAS_VISUALIZACAO';overlay.visible=false;scene.add(overlay);
   const pt=new T.Vector3(), projected=new T.Vector3(), worldScale=new T.Vector3(), worldPosition=new T.Vector3(), worldRotation=new T.Quaternion();
-  const format=value=>value.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:3});
+  const format=value=>value.toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});
   function add(id,name,category,min,max,object=null,note='') {
     if(min.some((n,i)=>!Number.isFinite(n)||!Number.isFinite(max[i])||max[i]<n))return;
     const entry={id,name,category,min:[...min],max:[...max],object,note};entries.push(entry);byId.set(id,entry);return entry;
@@ -102,41 +102,59 @@ function installOBDimensions({THREE:T,model,scene,camera,viewport,controls,chang
     const distance=camera.position.distanceTo(center),size=box.getSize(new T.Vector3()),pixelSize=size.length()*height/(2*Math.tan(camera.fov*Math.PI/360)*Math.max(distance,.01));
     return distance<32&&pixelSize>125;
   }
-  function renderEntry(e,v,height){
+  function renderEntry(e,v,height,width,occupied){
     const [x,y,z]=e.min,[X,Y,Z]=e.max,d=dimensions(e);
     const offset=e.category==='buildings'?1.35:.22;
     // Offset dimension lines and extension legs, with diagonal end ticks.
     const pairs=[[[x,y+.10,z-offset],[X,y+.10,z-offset],[x,y+.10,z],[X,y+.10,z]],[[X+offset,y+.10,z],[X+offset,y+.10,Z],[X,y+.10,z],[X,y+.10,Z]],[[X+offset,y,Z+offset],[X+offset,Y,Z+offset],[X,y,Z],[X,Y,Z]]];
     for(let a=0;a<3;a++){
       const [p0,p1,s0,s1]=pairs[a].map(p=>toWorld(e,p)),line=v.lines[a],label=v.labels[a],mid=p0.clone().add(p1).multiplyScalar(.5);
-      const pixelWorld=2*Math.max(.2,camera.position.distanceTo(mid))*Math.tan(camera.fov*Math.PI/360)/Math.max(1,height);
+      const depth=-mid.clone().applyMatrix4(camera.matrixWorldInverse).z;
+      const pixelWorld=2*Math.max(.2,depth)*Math.tan(camera.fov*Math.PI/360)/Math.max(1,height);
       const tick=Math.max(.025,pixelWorld*4),diag=new T.Vector3(tick,tick,a===2?0:tick),segments=[p0,p1,s0,p0,s1,p1,p0.clone().sub(diag),p0.clone().add(diag),p1.clone().sub(diag),p1.clone().add(diag),p0,p0];
       const array=line.geometry.attributes.position;segments.forEach((p,i)=>array.setXYZ(i,p.x,p.y,p.z));array.needsUpdate=true;
       const text=axes[a]+' '+format(d[a])+' m';
-      if(label.text!==text){const ctx=label.canvas.getContext('2d');ctx.clearRect(0,0,512,96);ctx.fillStyle='#102434';ctx.fillRect(0,0,512,96);ctx.strokeStyle='#'+colors[a].toString(16);ctx.lineWidth=5;ctx.strokeRect(3,3,506,90);ctx.font='bold 48px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#ffffff';ctx.fillText(text,256,49);label.texture.needsUpdate=true;label.text=text;}
-      label.sprite.position.copy(mid);label.sprite.scale.set(pixelWorld*116,pixelWorld*22,1);
-      const q=project(mid);label.sprite.visible=q.z>=-1&&q.z<=1;
+      if(label.text!==text){const ctx=label.canvas.getContext('2d');ctx.clearRect(0,0,512,96);ctx.fillStyle='#07131f';ctx.fillRect(0,0,512,96);ctx.strokeStyle='#'+colors[a].toString(16);ctx.lineWidth=5;ctx.strokeRect(3,3,506,90);ctx.font='bold 64px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#ffffff';ctx.fillText(text,256,49);label.texture.needsUpdate=true;label.text=text;}
+      const q=project(mid),labelW=Math.min(184,width-32),labelH=40;
+      label.sprite.visible=false;line.visible=false;
+      if(depth<=camera.near||q.z<-1||q.z>1||Math.abs(q.x)>1.2||Math.abs(q.y)>1.2)continue;
+      const anchorX=(q.x+1)*width/2,anchorY=(1-q.y)*height/2;
+      // Pack in screen pixels. Shift only the label and connect it back to its
+      // measured line; labels never cover one another or leave the viewport.
+      let slot=null;
+      for(const [dx,dy]of [[0,-30],[0,30],[0,-82],[0,82],[-labelW-12,0],[labelW+12,0],[-labelW-12,-60],[labelW+12,-60],[-labelW-12,60],[labelW+12,60],[0,-134],[0,134]]){
+        const x=Math.max(labelW/2+12,Math.min(width-labelW/2-12,anchorX+dx)),y=Math.max(28,Math.min(height-32,anchorY+dy));
+        const rect={left:x-labelW/2-5,right:x+labelW/2+5,top:y-labelH/2-5,bottom:y+labelH/2+5};
+        if(!occupied.some(b=>rect.left<b.right&&rect.right>b.left&&rect.top<b.bottom&&rect.bottom>b.top)){slot={x,y,rect};break;}
+      }
+      if(!slot)continue;
+      occupied.push(slot.rect);
+      const labelPosition=new T.Vector3(slot.x/width*2-1,1-slot.y/height*2,q.z).unproject(camera);
+      label.sprite.position.copy(labelPosition);label.sprite.scale.set(pixelWorld*labelW,pixelWorld*labelH,1);
+      label.sprite.visible=line.visible=true;label.sprite.userData.screenRect=slot.rect;
+      array.setXYZ(10,mid.x,mid.y,mid.z);array.setXYZ(11,labelPosition.x,labelPosition.y,labelPosition.z);array.needsUpdate=true;
     }
   }
   function tick(now=performance.now(),force=false){
     if(!enabled)return false;
     if(!force&&now-lastUpdate<100)return false;
     const width=viewport.clientWidth,height=viewport.clientHeight,pose=camera.matrixWorld.elements.join(',')+':'+width+':'+height;
+    if(width<100||height<100)return false;
     model.equipment.updateMatrixWorld(true);
     const objectPose=entries.filter(e=>e.object?.userData?.forklift).map(e=>e.object.matrixWorld.elements.join(',')).join(';');
     const moved=objectPose!==lastObjects;lastObjects=objectPose;
     if(!force&&!dirty&&pose===lastPose&&!moved)return false;
     lastPose=pose;lastUpdate=now;dirty=false;camera.updateMatrixWorld(true);model.equipment.updateMatrixWorld(true);
-    let count=0;for(const v of visualCache.values())v.root.visible=false;
+    let count=0;const occupied=[];for(const v of visualCache.values())v.root.visible=false;
     const candidates=selected==='all'?list():[byId.get(selected)];
     // Near-camera priority keeps the global all-cotas mode legible. Every item
     // remains available in the alphabetical selector and complete CSV.
     candidates.sort((a,b)=>(a.category==='buildings'?-1:0)-(b.category==='buildings'?-1:0)||camera.position.distanceToSquared(worldBox(a).getCenter(new T.Vector3()))-camera.position.distanceToSquared(worldBox(b).getCenter(new T.Vector3())));
-    for(const e of candidates){const box=worldBox(e);if(!visibleEntry(e,box,height,width))continue;if(selected==='all'&&count>=12)break;const v=visualCache.get(e.id)||makeVisual(e);v.root.visible=true;renderEntry(e,v,height);count++;}
+    for(const e of candidates){const box=worldBox(e);if(!visibleEntry(e,box,height,width))continue;if(selected==='all'&&count>=(width<600?3:6))break;const v=visualCache.get(e.id)||makeVisual(e);v.root.visible=true;renderEntry(e,v,height,width,occupied);count++;}
     if(count!==lastCount){status.textContent=count+' elementos cotados nesta vista. Selecione um item para isolar suas três medidas.';lastCount=count;}
     if(selected!=='all')updateReadout();return true;
   }
-  function csv(){const lines=[['Elemento','Categoria','Largura (m)','Comprimento (m)','Altura (m)','Observação'],...entries.map(e=>[e.name,categories[e.category],...dimensions(e).map(v=>v.toFixed(3).replace('.',',')),e.note])];return '\ufeff'+lines.map(row=>row.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(';')).join('\r\n');}
+  function csv(){const lines=[['Elemento','Categoria','Largura (m)','Comprimento (m)','Altura (m)','Observação'],...entries.map(e=>[e.name,categories[e.category],...dimensions(e).map(format),e.note])];return '\ufeff'+lines.map(row=>row.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(';')).join('\r\n');}
   section.querySelector('#dimension-csv').addEventListener('click',()=>{const url=URL.createObjectURL(new Blob([csv()],{type:'text/csv;charset=utf-8'})),link=document.createElement('a');link.href=url;link.download='OB_COTAS_DO_MODELO.csv';link.click();setTimeout(()=>URL.revokeObjectURL(url),30000);});
   fillItems();setEnabled(false);
   return {tick,setEnabled,get enabled(){return enabled;},entries,dimensions,csv,overlay,select(id){items.value=id;items.dispatchEvent(new Event('change'));},dispose(){for(const v of visualCache.values()){v.lines.forEach(o=>{o.geometry.dispose();o.material.dispose();});v.labels.forEach(o=>{o.texture.dispose();o.sprite.material.dispose();});}overlay.removeFromParent();section.remove();close.remove();style.remove();}};

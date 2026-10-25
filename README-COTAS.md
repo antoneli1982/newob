@@ -2,10 +2,10 @@
 
 O botão **Mostrar cotas** fica no menu lateral, abaixo de **Apresentar aos clientes**. No celular, abra o menu de controles.
 
-- Exibe **L** (largura), **C** (comprimento) e **H** (altura), em metros.
+- Exibe **L** (largura), **C** (comprimento) e **H** (altura), em metros, com **uma casa decimal** (ex.: 4,5 m), inclusive na lista CSV.
 - Filtros: prédios, paredes/pilares/mobiliário, vãos/acessos e equipamentos.
 - O seletor alfabético enquadra um elemento e mostra suas três medidas.
-- A visão geral mostra as cotas dos prédios; ao aproximar, surgem detalhes. Até 12 elementos são cotados simultaneamente para limitar a sobreposição. A seleção individual e o CSV dão acesso a todos os elementos.
+- A visão geral mostra as cotas dos prédios; ao aproximar, surgem detalhes. Até seis elementos (três em telas estreitas) são cotados simultaneamente. Etiquetas maiores, com fundo escuro, são distribuídas na tela sem sobreposição e ligadas à cota por linhas. A seleção individual e o CSV dão acesso a todos os elementos.
 - **Ocultar cotas** desliga as anotações. Também há um atalho sobre a imagem, inclusive no celular.
 - **Baixar lista de cotas** salva o catálogo completo em CSV.
 
