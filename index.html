@@ -5077,7 +5077,7 @@ var V = (x, y, z) => new Vector3(x, y, z);
     tube(p,[[side*.531,.139,-.535],[side*.537,.393,-.568],[side*.536,.671,-.622],[side*.521,.881,-.782]],.0024,materials.dark,48);
   }
 
-  function photoGuardRX20(body) {
+  function photoGuardRX20(body, {structureOnly=false}={}) {
     const guard=new Group();guard.name='RX20_arco_cabine_fotos';body.add(guard);
     // Rounded cast profile, with a broader roof and almost upright rear pillars.
     const profile=[[.49,.640],[.75,.584],[1.20,.432],[1.70,.274],[1.956,.111],[2.050,-.108],[2.056,-.540],[1.988,-.726],[1.771,-.779],[1.328,-.781],[1.032,-.756],[.936,-.671]];
@@ -5121,6 +5121,7 @@ var V = (x, y, z) => new Vector3(x, y, z);
     rg.rotateX(Math.PI/2);mesh(guard,rg,materials.silver,0,2.045,0).name='RX20_teto_vazado';
     // Rear cross-member and the transparent back window visible in the reference.
     box(guard,.835,.069,.116,0,1.979,-.671,materials.silver,.030);
+    if(structureOnly)return guard;
     const glass=new MeshStandardMaterial({color:'#c5dedf',roughness:.12,metalness:.04,transparent:true,opacity:.085,depthWrite:false,side:DoubleSide});
     const rearWindow=mesh(guard,new PlaneGeometry(.810,.912),glass,0,1.457,-.751);
     rearWindow.name='RX20_vidro_traseiro';rearWindow.castShadow=false;
@@ -5253,7 +5254,10 @@ var V = (x, y, z) => new Vector3(x, y, z);
     sidePanel(rxBody, -1);sidePanel(rxBody, 1);
     rxBody.children.slice(panelsStart).forEach(o=>tag(o,'panels'));
     box(rxBody, 0.87, 0.058, 0.58, 0, 0.455, 0.36, materials.silver, 0.027);
-    if(paintShell)return {root};
+    if(paintShell){
+      photoGuardRX20(rxBody,{structureOnly:true});
+      return {root};
+    }
     box(rxBody,.084,.037,.021,0,.550,-.966,materials.dark,.010);
     const tow=cyl(rxBody,.011,.011,.076,0,.542,-.979,materials.steel,16);
     box(rxBody,.119,.050,.010,0,.939,-.884,materials.dark,.016);
