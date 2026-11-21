@@ -5186,7 +5186,7 @@ var V = (x, y, z) => new Vector3(x, y, z);
     return g;
   }
   // Real material finishes, image-based surface detail and a linear HDR pipeline.
-  function createForklift() {
+  function createForklift({paintShell=false}={}) {
     initTextures();
     const root = new Group();
     root.name = "STILL_RX20_16";
@@ -5249,6 +5249,11 @@ var V = (x, y, z) => new Vector3(x, y, z);
       {y:.825,w:.486,d:.233,z:-.684},{y:.858,w:.494,d:.231,z:-.682},
       {y:.918,w:.468,d:.217,z:-.680},{y:.965,w:.439,d:.204,z:-.672}
     ],materials.silver);rearCover.name='RX20_carenagem_traseira_prateada';tag(rearCover,'cover');
+    let panelsStart=rxBody.children.length;
+    sidePanel(rxBody, -1);sidePanel(rxBody, 1);
+    rxBody.children.slice(panelsStart).forEach(o=>tag(o,'panels'));
+    box(rxBody, 0.87, 0.058, 0.58, 0, 0.455, 0.36, materials.silver, 0.027);
+    if(paintShell)return {root};
     box(rxBody,.084,.037,.021,0,.550,-.966,materials.dark,.010);
     const tow=cyl(rxBody,.011,.011,.076,0,.542,-.979,materials.steel,16);
     box(rxBody,.119,.050,.010,0,.939,-.884,materials.dark,.016);
@@ -5263,10 +5268,6 @@ var V = (x, y, z) => new Vector3(x, y, z);
       box(lights,.021,.034,.010,-side*.059,0,-.015,metal('#e0ddce',.25,.10),.003);
       for(let j=0;j<5;j++)box(lights,.112,.0016,.001,side*.010,-.012+j*.006,-.020,red);
     }
-    let panelsStart=rxBody.children.length;
-    sidePanel(rxBody, -1);sidePanel(rxBody, 1);
-    rxBody.children.slice(panelsStart).forEach(o=>tag(o,'panels'));
-    box(rxBody, 0.87, 0.058, 0.58, 0, 0.455, 0.36, materials.silver, 0.027);
     box(rxBody, 0.74, 0.016, 0.54, 0, 0.495, 0.35, materials.rubber, 0.01);
     for (let i = 0; i < 12; i++) box(rxBody, 0.68, 5e-3, 8e-3, 0, 0.507, 0.1 + i * 0.041, materials.black, 2e-3);
     for (let x of [-0.48, 0.48]) {
@@ -5574,22 +5575,17 @@ var V = (x, y, z) => new Vector3(x, y, z);
   return root;
 }
 function paintBoothForklift(materials){
-  const model=createForklift(), truck=model.root, fixture=new F1();
+  const truck=createForklift({paintShell:true}).root, fixture=new F1();
   fixture.name="Empilhadeira_em_preparacao";
-  model.blueRedZone.removeFromParent();
-  for(const wheel of [...model.fronts,...model.rear])wheel.hub.removeFromParent();
   const filler=new B7({name:"Massa_lixada",color:"#b8b3a8",roughness:.97,metalness:0,
     normalMap:materials.plaster.normalMap,normalScale:new e6.Vector2(.065,.065)});
-  const graphite=new B7({color:"#414346",roughness:.82});
-  const discard=[];
+  const decals=[];
   truck.traverse(node=>{
-    if(!node.visible||(node.isMesh&&(node.material.transparent||node.material.polygonOffset)))discard.push(node);
-    else if(node.isMesh){
-      node.material=graphite;
-      for(let p=node.parent;p;p=p.parent){if(p.name==="RX20_bodywork"){node.material=filler;break;}}
-    }else if(node.isLight)discard.push(node);
+    if(!node.isMesh)return;
+    if(node.material.transparent||node.material.polygonOffset)decals.push(node);
+    else node.material=filler;
   });
-  for(const node of discard)node.removeFromParent();
+  for(const decal of decals)decal.removeFromParent();
   truck.position.y=.28;fixture.add(truck);
   function piece(parent,geometry,mat,x,y,z){
     const part=new L1(geometry,mat);part.position.set(x,y,z);parent.add(part);return part;
